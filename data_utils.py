@@ -4,12 +4,13 @@ import os
 from xml_decode import decode
 from utils import *
 from xml_decode import *
+from specials import Specials
 import csv
 import codecs
 
 
 UTF8_BOM_LEN = len(codecs.BOM_UTF8)
-BASE_DATA_PATH = '../data'
+BASE_DATA_PATH = '../FINAL FANTASY XIV/data'
 
 
 def sheet_id_to_path(sheet_id):
@@ -104,12 +105,18 @@ def get_data_rows(sheet, data_path, offset_path, columns, rows):
                 index += 2
                 if ba[index] != 0xFF:
                     (string, _) = export_string(ba, index, str_len)
-                    row.append(str(process_special_chars_in_utf8(string), "utf-8"))
                 else:
                     sl = str_len - 1
                     for i in range(1, sl):
                         ba[index + i] ^= 0x73
-                    row.append(str(process_special_chars_in_utf8(ba[index + 1:index + sl]), 'utf-8'))
+                    string = ba[index + 1:index + sl]
+                string_procceed = Specials.process(string)
+                try:
+                    row.append(str(process_special_chars_in_utf8(string_procceed), "utf-8"))
+                except Exception:
+                    print(string)
+                    print(string_procceed)
+                    exit(0)
 
                 index += str_len
 
