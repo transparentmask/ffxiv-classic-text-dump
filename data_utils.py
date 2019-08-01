@@ -122,6 +122,7 @@ def get_data_rows(sheet, block_path, data_path, offset_path, columns, rows):
                 row.append(str(process_special_chars_in_utf8(string_procceed), "utf-8"))
 
                 index += str_len
+        block_file.close()
 
 
 def export_sheet(sheet, export_path):
