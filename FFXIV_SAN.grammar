@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ufwb version="1.17">
+    <grammar name="SAN grammar" start="id:30" author="Martin Yin" email="transparentmask@gmail.com" fileextension="san">
+        <description>Grammar for SAN files</description>
+        <structure name="FFXIV_SAN" id="30" encoding="ISO_8859-1:1987" endian="big" signed="no">
+            <number name="counts" id="31" fillcolor="FF2600" type="integer" length="4"/>
+            <structref name="datas" id="33" repeatmax="-1" structure="id:32"/>
+        </structure>
+        <structure name="DATA" id="32" encoding="ISO_8859-1:1987" endian="big" signed="no">
+            <number name="index" id="35" fillcolor="FEFB00" type="integer" length="4"/>
+            <string name="name" id="36" fillcolor="AA7941" type="zero-terminated"/>
+        </structure>
+    </grammar>
+</ufwb>
