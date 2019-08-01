@@ -60,9 +60,11 @@ def get_row_indexes(enable_path):
     return [[i] for i in indexes]
 
 
-def get_data_rows(sheet, data_path, offset_path, columns, rows):
+def get_data_rows(sheet, block_path, data_path, offset_path, columns, rows):
     with open(data_path, 'rb') as f:
         ba = bytearray(f.read())
+
+    # merge same value in offset list
     with open(offset_path, 'rb') as f:
         offsets_ba = bytearray(f.read())
         offsets = [0]
@@ -73,12 +75,10 @@ def get_data_rows(sheet, data_path, offset_path, columns, rows):
             if offset == offsets[-1]:
                 continue
             offsets.append(offset)
+
+    block_file = open(block_path, 'wb')
     index = 0
     for off_index, row in enumerate(rows):
-        # end = 0
-        # if 'xtx/quest' == sheet.name:
-        #     index = offsets[off_index]
-        #     end = offsets[off_index + 1] if off_index < len(offsets) - 1 else len(ba)
         index = offsets[off_index]
         end = offsets[off_index + 1] if off_index < len(offsets) - 1 else len(ba)
         for col in columns:
@@ -87,18 +87,23 @@ def get_data_rows(sheet, data_path, offset_path, columns, rows):
 
             if col == 's8' or col == 'u8' or col == 'bool':
                 row.append(hex2int(ba[index:index + 1], highAsFlag=(col == 's8')))
+                block_file.write(ba[index:index + 1])
                 index += 1
             elif col == 's16' or col == 'u16':
                 row.append(hex2int(ba[index:index + 2], highAsFlag=(col == 's16')))
+                block_file.write(ba[index:index + 2])
                 index += 2
             elif col == 'f16':
                 row.append(hex2float(ba[index:index + 2]))
+                block_file.write(ba[index:index + 2])
                 index += 2
             elif col == 's32' or col == 'u32':
                 row.append(hex2int(ba[index:index + 4], highAsFlag=(col == 's32')))
+                block_file.write(ba[index:index + 4])
                 index += 4
             elif col == 'float':
                 row.append(hex2float(ba[index:index + 4]))
+                block_file.write(ba[index:index + 4])
                 index += 4
             elif col == 'str':
                 str_len = hex2int(ba[index:index + 2])
@@ -111,33 +116,33 @@ def get_data_rows(sheet, data_path, offset_path, columns, rows):
                         ba[index + i] ^= 0x73
                     string = ba[index + 1:index + sl]
                 string_procceed = Specials.process(string)
-                try:
-                    row.append(str(process_special_chars_in_utf8(string_procceed), "utf-8"))
-                except Exception:
-                    print(string)
-                    print(string_procceed)
-                    exit(0)
+                block_file.write(int2hex(len(string_procceed) + 1, 2))
+                block_file.write(string_procceed)
+                block_file.write(b'\x00')
+                row.append(str(process_special_chars_in_utf8(string_procceed), "utf-8"))
 
                 index += str_len
 
 
 def export_sheet(sheet, export_path):
-    export_path = os.path.join(export_path, sheet.name, "%s.csv" % (sheet.lang if sheet.lang is not None else "data"))
+    path = os.path.join(export_path, sheet.name, "%s.csv" % (sheet.lang if sheet.lang is not None and len(sheet.lang) > 0 else "data"))
     # print(export_path)
-    with codecs.open(export_path, 'w', 'utf-8') as csvfile:
+    with codecs.open(path, 'w', 'utf-8') as csvfile:
         writer = csv.writer(csvfile)
         head = ["No"]
         head.extend(sheet.type_params)
         writer.writerow(head)
         for block in sheet.blocks:
             # print(block)
+            block_name = '%s_%s.bin' % (sheet.lang, block.data) if sheet.lang is not None and len(sheet.lang) > 0 else '%s.bin' % (block.data)
+            block_path = os.path.join(export_path, sheet.name, block_name)
             enable_path = sheet_id_to_path(block.enable)
             offset_path = sheet_id_to_path(block.offset)
             data_path = sheet_id_to_path(block.data)
             if os.path.exists(enable_path):
                 rows = get_row_indexes(enable_path)
                 if os.path.exists(data_path) and os.path.exists(offset_path):
-                    get_data_rows(sheet, data_path, offset_path, sheet.type_params, rows)
+                    get_data_rows(sheet, block_path, data_path, offset_path, sheet.type_params, rows)
                     writer.writerows(rows)
                 else:
                     if not os.path.exists(offset_path):
