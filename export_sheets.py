@@ -19,13 +19,14 @@ def main():
         pass
 
     # # xtx/text_directName: 189071391 (data/0B/45/00/1F.DAT)
-    # data = {}
-    # xml = get_xml_from_sheet_id(189071391)
+    # # xtx/quest: 189072473
+    # xml = get_xml_from_sheet_id(189072473)
     # sheet_doc = fromstring(xml)
-    # for sheet in sheet_doc.iterfind('sheet'):
+    # for sheet in reversed(list(sheet_doc.iterfind('sheet'))):
     #     sheet_info = SheetInfo(sheet)
-    #     export_sheet_json(sheet_info, data)
-    # print(json.dumps(data, ensure_ascii=False, indent=4))
+    #     print(sheet_info)
+    #     export_sheet(sheet_info, EXPORT_PATH)
+    #     break
     # exit(0)
 
     xml = get_xml_from_sheet_id(BASE_SHEET_ID)
