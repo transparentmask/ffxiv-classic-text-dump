@@ -18,7 +18,7 @@ def decode(path):
     # print(path)
     with open(path, 'rb') as f:
         ba = bytearray(f.read())
-    if ba[-1] != '\xF1' and ba[-1] != 241:
+    if ba[-1] != '\xF1' and ba[-1] != 0xF1:
         return str(ba, 'utf-8')
 
     dst_len = len(ba) - 1
@@ -33,7 +33,7 @@ def decode(path):
         tmp = hex2int(ba[start: start + 2]) ^ xA
         ba[start: start + 2] = int2hex(tmp, length=2)
         if start == 0:
-            if (ba[0] != '\xef' and ba[0] != 239) or (ba[1] != '\xbb' and ba[1] != 187):
+            if (ba[0] != '\xef' and ba[0] != 0xef) or (ba[1] != '\xbb' and ba[1] != 0xbb):
                 return None
         start += 4
 

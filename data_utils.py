@@ -24,7 +24,7 @@ def sheet_id_to_path(sheet_id):
 def is_xml_file(path):
     with open(path, 'rb') as f:
         contents = f.read()
-        return contents[-1] == 241  # '\xF1'
+        return contents[-1] == 0xF1  # '\xF1'
 
 
 def get_xml_from_path(path):
@@ -40,7 +40,7 @@ def get_xml_from_sheet_id(sheet_id=0, sheet_path=None):
     if xml is None:
         with open(sheet_path, 'rb') as f:
             xml = f.read()
-            if ((xml[0] != '\xef' and xml[0] != 239) or (xml[1] != '\xbb' and xml[1] != 187)) and xml[0] != '<':
+            if ((xml[0] != '\xef' and xml[0] != 0xef) or (xml[1] != '\xbb' and xml[1] != 0xbb)) and xml[0] != '<':
                 return None
             xml = xml.decode('UTF-8')
     return xml[UTF8_BOM_LEN:] if xml[:UTF8_BOM_LEN] == codecs.BOM_UTF8 else xml
