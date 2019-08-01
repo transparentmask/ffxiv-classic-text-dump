@@ -33,3 +33,6 @@ class SheetInfo:
         self.blocks = []
         for block_file in sheet.iterfind('block/file'):
             self.blocks.append(Block(block_file))
+
+    def __str__(self):
+        return "sheet: %s; lang: %s" % (self.name, self.lang)
