@@ -223,6 +223,17 @@ class Specials:
         while _buf.tell() < end:
             case = self.process_expression_for_str(_buf)
             cases.append(str(case))
+        if isinstance(case_switch, int):
+            try:
+                return cases[case_switch - 1]
+            except Exception:
+                pass
+        elif isinstance(case_switch, str) and case_switch.startswith('【'):
+            try:
+                case_index = int(case_switch.strip('【】')) - 1
+                return cases[case_index]
+            except Exception:
+                pass
         return '<Switch %s>%s</Switch>' % (case_switch, '; '.join(['%d: %s' % (i + 1, v) for i, v in enumerate(cases)]))
 
     def process_type_line_break(self, _buf, tag, length):
