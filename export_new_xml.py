@@ -8,7 +8,8 @@ from data_utils import *
 from data_types import *
 
 
-EXPORT_PATH = 'sheets'
+EXPORT_PATH = 'sheets_new'
+EXPORT_BIN = False
 
 
 def main():
@@ -47,7 +48,9 @@ def main():
             f.write(xml)
             for sheet in sheet_doc.iterfind('sheet'):
                 sheet_info = SheetInfo(sheet)
-                export_sheet(sheet_info, EXPORT_PATH)
+                # if sheet_info.lang and sheet_info.lang not in ['chs', 'ja', 'en']:
+                #     continue
+                export_sheet(sheet_info, EXPORT_PATH, EXPORT_BIN)
 
 
 if __name__ == '__main__':

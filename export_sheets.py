@@ -8,7 +8,8 @@ from data_utils import *
 from data_types import *
 
 
-EXPORT_PATH = 'sheets'
+EXPORT_PATH = 'sheets_new'
+EXPORT_BIN = False
 BASE_SHEET_ID = 16973824
 
 
@@ -54,7 +55,9 @@ def main():
             # data = {}
             for sheet in sheet_doc.iterfind('sheet'):
                 sheet_info = SheetInfo(sheet)
-                export_sheet(sheet_info, EXPORT_PATH)
+                # if sheet_info.lang and sheet_info.lang not in ['chs', 'ja', 'en']:
+                #     continue
+                export_sheet(sheet_info, EXPORT_PATH, EXPORT_BIN)
             #     export_sheet_json(sheet_info, data)
             # with codecs.open(os.path.join(EXPORT_PATH, sheet_info.name, "data.json"), 'w', 'utf-8') as f:
             #     json.dump(data, f, ensure_ascii=False, indent=4)

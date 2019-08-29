@@ -1,13 +1,10 @@
 #!/usr/local/bin/python
 # -*- coding: utf-8 -*-
-import os
-from xml_decode import decode
-from utils import *
-from xml_decode import *
-from specials import Specials
-import csv
 import codecs
-
+import csv
+from io import BytesIO
+from specials import Specials
+from xml_decode import *
 
 UTF8_BOM_LEN = len(codecs.BOM_UTF8)
 BASE_DATA_PATH = '../FINAL FANTASY XIV/data'
@@ -22,8 +19,8 @@ def sheet_id_to_path(sheet_id):
 
 
 def is_xml_file(path):
-    with open(path, 'rb') as f:
-        contents = f.read()
+    with open(path, 'rb') as file:
+        contents = file.read()
         return contents[-1] == 0xF1  # '\xF1'
 
 
@@ -38,8 +35,8 @@ def get_xml_from_sheet_id(sheet_id=0, sheet_path=None):
         sheet_path = sheet_id_to_path(sheet_id)
     xml = get_xml_from_path(sheet_path)
     if xml is None:
-        with open(sheet_path, 'rb') as f:
-            xml = f.read()
+        with open(sheet_path, 'rb') as file:
+            xml = file.read()
             if ((xml[0] != '\xef' and xml[0] != 0xef) or (xml[1] != '\xbb' and xml[1] != 0xbb)) and xml[0] != '<':
                 return None
             xml = xml.decode('UTF-8')
@@ -49,8 +46,8 @@ def get_xml_from_sheet_id(sheet_id=0, sheet_path=None):
 # Export CSV
 def get_row_indexes(enable_path):
     indexes = []
-    with open(enable_path, 'rb') as f:
-        ba = bytearray(f.read())
+    with open(enable_path, 'rb') as file:
+        ba = bytearray(file.read())
     index = 0
     while index < len(ba):
         start = hex2int(ba[index:index + 4])
@@ -60,13 +57,13 @@ def get_row_indexes(enable_path):
     return [[i] for i in indexes]
 
 
-def get_data_rows(sheet, block_path, data_path, offset_path, columns, rows):
-    with open(data_path, 'rb') as f:
-        ba = bytearray(f.read())
+def get_data_rows(sheet, block_path, data_path, offset_path, columns, rows, export_bin=False):
+    with open(data_path, 'rb') as file:
+        ba = bytearray(file.read())
 
     # merge same value in offset list
-    with open(offset_path, 'rb') as f:
-        offsets_ba = bytearray(f.read())
+    with open(offset_path, 'rb') as file:
+        offsets_ba = bytearray(file.read())
         offsets = [0]
         i = 0
         while i < len(offsets_ba):
@@ -76,66 +73,71 @@ def get_data_rows(sheet, block_path, data_path, offset_path, columns, rows):
                 continue
             offsets.append(offset)
 
-    block_file = open(block_path, 'wb')
+    size = len(ba)
+    buf = BytesIO()
+    buf.write(ba)
+    buf.seek(0)
+
+    if export_bin:
+        block_file = open(block_path, 'wb')
     index = 0
+    # print(data_path)
     for off_index, row in enumerate(rows):
         index = offsets[off_index]
         end = offsets[off_index + 1] if off_index < len(offsets) - 1 else len(ba)
+        buf.seek(index)
         for col in columns:
-            if (end > 0 and index >= end) or index >= len(ba):
+            if (0 < end <= buf.tell()) or index >= size:
                 break
 
-            if col == 's8' or col == 'u8' or col == 'bool':
-                row.append(hex2int(ba[index:index + 1], highAsFlag=(col == 's8')))
-                block_file.write(ba[index:index + 1])
-                index += 1
-            elif col == 's16' or col == 'u16':
-                row.append(hex2int(ba[index:index + 2], highAsFlag=(col == 's16')))
-                block_file.write(ba[index:index + 2])
-                index += 2
-            elif col == 'f16':
-                row.append(hex2float(ba[index:index + 2]))
-                block_file.write(ba[index:index + 2])
-                index += 2
-            elif col == 's32' or col == 'u32':
-                row.append(hex2int(ba[index:index + 4], highAsFlag=(col == 's32')))
-                block_file.write(ba[index:index + 4])
-                index += 4
-            elif col == 'float':
-                row.append(hex2float(ba[index:index + 4]))
-                block_file.write(ba[index:index + 4])
-                index += 4
-            elif col == 'str':
-                str_len = hex2int(ba[index:index + 2])
-                index += 2
-                if ba[index] != 0xFF:
-                    (string, _) = export_string(ba, index, str_len)
+            if col == 'str':
+                str_len = hex2int(buf.read(2))
+                if buf.read(1) != b'\xff':
+                    _bytes = export_string_bytes(buf, buf.tell() - 1, str_len)
                 else:
-                    sl = str_len - 1
-                    for i in range(1, sl):
-                        ba[index + i] ^= 0x73
-                    string = ba[index + 1:index + sl]
-                string_procceed = Specials.process(string)
-                block_file.write(int2hex(len(string_procceed) + 1, 2))
-                block_file.write(string_procceed)
-                block_file.write(b'\x00')
-                row.append(str(process_special_chars_in_utf8(string_procceed), "utf-8"))
-
-                index += str_len
+                    _bytes = bytes(map(lambda b: b ^ 0x73, buf.read(str_len - 1)))
+                # if _bytes[-1] == 0x00:
+                    # _bytes = _bytes[:-1]
+                if export_bin:
+                    block_file.write(int2hex(len(_bytes), 2))
+                    block_file.write(_bytes)
+                if _bytes[-1] == 0x00:
+                    _bytes = _bytes[:-1]
+                procceed = Specials.process(_bytes)
+                try:
+                    row.append(str(procceed, 'utf8') if _bytes else '')
+                except Exception:
+                    print(' '.join(['%.2X' % b for b in procceed]))
+                    procceed = Specials.process(_bytes)
+                # row.append(str(Specials.process(_bytes), 'utf8') if _bytes else '')
+            else:
+                byte = buf.read(DATA_SIZE[col])
+                if export_bin:
+                    block_file.write(byte)
+                if col[0] == 'f':
+                    row.append(hex2float(byte))
+                elif col[0] == 's':
+                    row.append(hex2int(byte, high_as_flag=True))
+                else:
+                    row.append(hex2int(byte))
+    if export_bin:
         block_file.close()
 
 
-def export_sheet(sheet, export_path):
-    path = os.path.join(export_path, sheet.name, "%s.csv" % (sheet.lang if sheet.lang is not None and len(sheet.lang) > 0 else "data"))
+def export_sheet(sheet, export_path, export_bin=False):
+    path = os.path.join(export_path, sheet.name, "%s.csv" % (sheet.lang if sheet.lang is not None and sheet.lang else "data"))
     # print(export_path)
     with codecs.open(path, 'w', 'utf-8') as csvfile:
         writer = csv.writer(csvfile)
+        head = ["No"]
+        head.extend(sheet.index_params)
+        writer.writerow(head)
         head = ["No"]
         head.extend(sheet.type_params)
         writer.writerow(head)
         for block in sheet.blocks:
             # print(block)
-            block_name = '%s_%s.bin' % (sheet.lang, block.data) if sheet.lang is not None and len(sheet.lang) > 0 else '%s.bin' % (block.data)
+            block_name = '%s_%s.bin' % (sheet.lang, block.data) if sheet.lang is not None and sheet.lang else '%s.bin' % block.data
             block_path = os.path.join(export_path, sheet.name, block_name)
             enable_path = sheet_id_to_path(block.enable)
             offset_path = sheet_id_to_path(block.offset)
@@ -143,7 +145,7 @@ def export_sheet(sheet, export_path):
             if os.path.exists(enable_path):
                 rows = get_row_indexes(enable_path)
                 if os.path.exists(data_path) and os.path.exists(offset_path):
-                    get_data_rows(sheet, block_path, data_path, offset_path, sheet.type_params, rows)
+                    get_data_rows(sheet, block_path, data_path, offset_path, sheet.type_params, rows, export_bin)
                     writer.writerows(rows)
                 else:
                     if not os.path.exists(offset_path):
@@ -156,95 +158,3 @@ def export_sheet(sheet, export_path):
                     print("\t***%s offset missing: %s" % (sheet.lang, offset_path))
                 if not os.path.exists(data_path):
                     print("\t***%s data missing: %s" % (sheet.lang, data_path))
-
-
-# Export JSON
-def get_row_indexes_json(enable_path):
-    indexes = []
-    with open(enable_path, 'rb') as f:
-        ba = bytearray(f.read())
-    index = 0
-    while index < len(ba):
-        start = hex2int(ba[index:index + 4])
-        num = hex2int(ba[index + 4:index + 8])
-        index += 8
-        indexes.extend(list(range(start, start + num)))
-    return [str(i) for i in indexes]
-
-
-def get_row_data_json(data_path, offset_path, columns, data, rows, lang):
-    with open(data_path, 'rb') as f:
-        ba = bytearray(f.read())
-    with open(offset_path, 'rb') as f:
-        offsets_ba = bytearray(f.read())
-        offsets = []
-        for i in range(len(rows)):
-            offsets.append(hex2int(offsets_ba[i * 4:i * 4 + 4]))
-
-    index = 0
-    for off_index, row in enumerate(rows):
-        index = offsets[off_index]
-        end = offsets[off_index + 1] if off_index < len(offsets) - 1 else len(ba)
-        if row not in data or lang not in data[row]:
-            print('err')
-            continue
-
-        r = data[row][lang]
-        for col in columns:
-            if index >= end:
-                break
-
-            if col == 's8' or col == 'u8' or col == 'bool':
-                r.append(hex2int(ba[index:index + 1], highAsFlag=(col == 's8')))
-                index += 1
-            elif col == 's16' or col == 'u16':
-                r.append(hex2int(ba[index:index + 2], highAsFlag=(col == 's16')))
-                index += 2
-            elif col == 'f16':
-                r.append(hex2float(ba[index:index + 2]))
-                index += 2
-            elif col == 's32' or col == 'u32':
-                r.append(hex2int(ba[index:index + 4], highAsFlag=(col == 's32')))
-                index += 4
-            elif col == 'float':
-                r.append(hex2float(ba[index:index + 4]))
-                index += 4
-            elif col == 'str':
-                str_len = hex2int(ba[index:index + 2])
-                index += 2
-                if ba[index] != 0xFF:
-                    (string, _) = export_string(ba, index, str_len)
-                    r.append(str(process_special_chars_in_utf8(string), "utf-8"))
-                else:
-                    sl = str_len - 1
-                    for i in range(1, sl):
-                        ba[index + i] ^= 0x73
-                    r.append(str(process_special_chars_in_utf8(ba[index + 1:index + sl]), 'utf-8'))
-
-                index += str_len
-
-
-def export_sheet_json(sheet, data):
-    for block in sheet.blocks:
-        enable_path = sheet_id_to_path(block.enable)
-        offset_path = sheet_id_to_path(block.offset)
-        data_path = sheet_id_to_path(block.data)
-        if not os.path.exists(enable_path):
-            print("\t***%s enable missing: %s" % (sheet.lang, enable_path))
-            continue
-        if not os.path.exists(data_path):
-            print("\t***%s offset missing: %s" % (sheet.lang, offset_path))
-            continue
-        if not os.path.exists(offset_path):
-            print("\t***%s data missing: %s" % (sheet.lang, data_path))
-            continue
-
-        rows = get_row_indexes_json(enable_path)
-        for row in rows:
-            if row not in data:
-                data[row] = {}
-            if sheet.lang is None:
-                data[row]['data'] = []
-            elif sheet.lang not in data[row]:
-                data[row][sheet.lang] = []
-        get_row_data_json(data_path, offset_path, sheet.type_params, data, rows, sheet.lang if sheet.lang is not None else 'data')

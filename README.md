@@ -3,7 +3,7 @@
 仅为了从ffxiv 1.x的客户端内导出文本(包括中文)，用于考古、娱乐、休闲、健脑... 
 
 ## 使用环境
-目前仅支持python3，python2无法正常工作。
+目前仅支持python3.5+，python2无法正常工作。
 依赖项应该只有lxml，具体请参见requirements.txt
 
 ## 内容物简要说明
@@ -26,9 +26,16 @@
 导出上述之外，检索到的疑似xml（加密状态）的文件及其指向内容
 需要new_xml_list.txt作为文件索引，可由find_all_xmls.py生成
 
-- specials.json
-由于文本中有各种非可读的占位符和特殊内容（比如对话框换页、换行，或者玩家名字替换等），均尝试在这里记录，并在收集足够内容后，尝试在dump时进行替换
-
+- tag_type.py
+- expression_type.py
+- integer_type.py
+- specials.py
+主要用来处理文本中的特殊字符(以0x02开头,0x03结束的数据块)，感谢[SaintCoinach](https://github.com/ufx/SaintCoinach)项目中的相关部分，这个部分基本1.x跟ARR是通用的(虽然有部分类型要自己猜或者类型不太一样的地方)
 
 ## 使用配置
 需要配置data_utils.py内的BASE_DATA_PATH，以指向你本地FFXIV 1.x客户端中的data目录
+
+## TODO（咕咕咕清单，简称沽清）
+- 目前导出的内容中，有较多混乱的转移字符和字符串标记等，后续计划参考[SaintCoinach](https://github.com/ufx/SaintCoinach)的做法，解析过程中采用节点树的形式，最终统一输出。
+- 在前一步的基础上，将Sheet类“函数”用到的表单优先解析，并进行字典化缓存。
+- 在前一步的基础上，对非变量形式引用的Sheet类（SheetJa/SheetEN/SheetFr/SheetDe目前还不太理解，而且变量类型的为主，暂时无视）进行静态文本的替换，以便于阅读。

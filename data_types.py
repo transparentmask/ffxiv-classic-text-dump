@@ -28,7 +28,7 @@ class SheetInfo:
         for type_param in sheet.iterfind('type/param'):
             self.type_params.append(type_param.text)
         self.index_params = []
-        for index_param in sheet.iterfind('type/index'):
+        for index_param in sheet.iterfind('index/param'):
             self.index_params.append(int(index_param.text))
         self.blocks = []
         for block_file in sheet.iterfind('block/file'):

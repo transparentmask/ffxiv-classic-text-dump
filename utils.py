@@ -3,8 +3,21 @@
 import struct
 
 
-def int2hex(value, length=4, bigEndian=False):
-    flag = '>' if bigEndian else '<'
+DATA_SIZE = {
+    's8': 1,
+    'u8': 1,
+    'bool': 1,
+    's16': 2,
+    'u16': 2,
+    'f16': 2,
+    's32': 4,
+    'u32': 4,
+    'float': 4
+}
+
+
+def int2hex(value, length=4, big_endian=False):
+    flag = '>' if big_endian else '<'
     if length == 1:
         flag += 'B'
     elif length == 2:
@@ -18,8 +31,8 @@ def int2hex(value, length=4, bigEndian=False):
     return bytearray(struct.pack(flag, value))
 
 
-def hex2int(hex_ba, bigEndian=False, highAsFlag=False):
-    flag = '>' if bigEndian else '<'
+def hex2int(hex_ba, big_endian=False, high_as_flag=False):
+    flag = '>' if big_endian else '<'
     if len(hex_ba) == 1:
         flag += 'B'
     elif len(hex_ba) == 2:
@@ -27,14 +40,14 @@ def hex2int(hex_ba, bigEndian=False, highAsFlag=False):
     elif len(hex_ba) == 4:
         flag += 'I'
 
-    if highAsFlag:
+    if high_as_flag:
         flag = flag.lower()
 
     return struct.unpack(flag, hex_ba)[0]
 
 
-def hex2float(hex_ba, bigEndian=False):
-    flag = '>' if bigEndian else '<'
+def hex2float(hex_ba, big_endian=False):
+    flag = '>' if big_endian else '<'
     if len(hex_ba) == 2:
         flag += 'e'
     elif len(hex_ba) == 4:
@@ -45,11 +58,23 @@ def hex2float(hex_ba, bigEndian=False):
 
 def export_string(data, start=0, count=0, terminator='\x00'):
     if count == 0:
-        t = data[start:].find(terminator) + start + 1
+        end = data[start:].find(terminator) + start + 1
     else:
-        t = start + count
-    d = data[start:t]
-    return (d[:-1], t)
+        end = start + count
+    data = data[start:end]
+    return (data[:-1], end)
+
+
+def export_string_bytes(buf, start=0, count=0, terminator=b'\x00'):
+    if start == 0:
+        start = buf.tell()
+    if count == 0:
+        while buf.read(1) != terminator:
+            pass
+        count = buf.tell() - start
+
+    buf.seek(start)
+    return buf.read(count)
 
 
 def process_special_chars_in_utf8(ba):
