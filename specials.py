@@ -188,23 +188,47 @@ class Specials:
     def process_type_if(self, _buf, tag, length):
         start = _buf.tell()
         end = start + length
-        try:
-            result = self.process_expression(_buf, tag_type=tag)
-            if isinstance(result, tuple):
-                (exp_type, left, right) = result
-                condition = '%s(%s, %s)' % (exp_type.name, str(left), str(right))
-            else:
-                condition = str(result)
-        except Exception:
-            traceback.print_exc()
-            _buf.seek(start)
-            print(_buf.read(1))
-            _buf.seek(start-16 if start-16 > 0 else 0)
-            _bytes = _buf.read(0x4D)
-            print(' '.join(map(lambda b: '%.2X' % b, _bytes)))
-            _buf.seek(start)
-            (exp_type, left, right) = self.process_expression(_buf)
-            exit(0)
+        result = self.process_expression(_buf, tag_type=tag)
+        force_result = False
+        force_true = True
+        if isinstance(result, tuple):
+            (exp_type, left, right) = result
+            condition = '%s(%s, %s)' % (exp_type.name, str(left), str(right))
+
+            while True:
+                try:
+                    if isinstance(left, str):
+                        if left.startswith('【'):
+                            left = left.strip('【】')
+                            if str(int(left)) != left:
+                                break
+                        left = int(left)
+                    if isinstance(right, str):
+                        if right.startswith('【'):
+                            right = right.strip('【】')
+                            if str(int(right)) != right:
+                                break
+                        right = int(right)
+                    if isinstance(left, int) and isinstance(right, int):
+                        force_result = True
+                        if exp_type == ExpressionType.GreaterThanOrEqualTo:
+                            force_true = (left >= right)
+                        elif exp_type == ExpressionType.GreaterThan:
+                            force_true = (left > right)
+                        elif exp_type == ExpressionType.LessThanOrEqualTo:
+                            force_true = (left <= right)
+                        elif exp_type == ExpressionType.LessThan:
+                            force_true = (left < right)
+                        elif exp_type == ExpressionType.Equal:
+                            force_true = (left == right)
+                        elif exp_type == ExpressionType.NotEqual:
+                            force_true = (left != right)
+                except Exception:
+                    pass
+                break
+        else:
+            condition = str(result)
+
         true_value = self.process_expression_for_str(_buf) if _buf.tell() < end else ''
         false_value = self.process_expression_for_str(_buf) if _buf.tell() < end else ''
 
@@ -213,6 +237,9 @@ class Specials:
             while _buf.tell() < end:
                 falses.append(self.process_expression_for_str(_buf))
             false_value = '[%s]' % ', '.join(falses)
+
+        if force_result:
+            return str(true_value) if force_true else str(false_value)
 
         return '<If(%s)>%s<Else>%s</If>' % (condition, str(true_value), str(false_value))
 
@@ -230,8 +257,9 @@ class Specials:
                 pass
         elif isinstance(case_switch, str) and case_switch.startswith('【'):
             try:
-                case_index = int(case_switch.strip('【】')) - 1
-                return cases[case_index]
+                case_index = case_switch.strip('【】')
+                if str(int(case_index)) == case_index:
+                    return cases[int(case_index) - 1]
             except Exception:
                 pass
         return '<Switch %s>%s</Switch>' % (case_switch, '; '.join(['%d: %s' % (i + 1, v) for i, v in enumerate(cases)]))
@@ -350,14 +378,14 @@ class Specials:
 
     def process_type_split(self, _buf, tag, length):
         (args, content) = self._process_type_generic_element(_buf, tag, length, 3, False, not_format=True)
-        using_family = (args[-1] == 2 or args[-1] == '2')
+        using_surname = (args[-1] == 2 or args[-1] == '2')
         orginal_name = args[1].replace('\'', '')
-        if orginal_name== '<Highlight>[SelfName]</Highlight>':
-            return '[SelfName_FamilyName]' if using_family else '[SelfName_GivenName]'
-        if orginal_name == '<Highlight>[Name1]</Highlight>':
-            return '[Name1_FamilyName]' if using_family else '[Name1_GivenName]'
-        if orginal_name == '<Highlight>[Name2]</Highlight>':
-            return '[Name2_FamilyName]' if using_family else '[Name2_GivenName]'
+        if orginal_name== '<Highlight>〖SelfName〗</Highlight>':
+            return '〖SelfName_Surname〗' if using_surname else '〖SelfName_forename〗'
+        if orginal_name == '<Highlight>〖Name1〗</Highlight>':
+            return '〖Name1_Surname〗' if using_surname else '〖Name1_forename〗'
+        if orginal_name == '<Highlight>〖Name2〗</Highlight>':
+            return '〖Name2_Surname〗' if using_surname else '〖Name2_forename〗'
 
         return '<Split(%s, %s)[%s]>' % (orginal_name, args[2], args[-1])
         # return self._process_type_generic_element_format(tag, args, content)

@@ -29,7 +29,7 @@ class PlayerParameter(Enum):
     def try_to_string(player_var):
         try:
             enum_var = PlayerParameter(player_var)
-            return '[%s]' % enum_var.name
+            return '〖%s〗' % enum_var.name
         except ValueError:
             return 'player_var(' + str(player_var) + ')'
 
@@ -45,7 +45,7 @@ class ObjectParameter(Enum):
     def try_to_string(obj_var):
         try:
             enum_var = ObjectParameter(obj_var)
-            return '[%s]' % enum_var.name
+            return '〖%s〗' % enum_var.name
         except ValueError:
             return 'obj_var(' + str(obj_var) + ')'
 
