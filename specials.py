@@ -6,10 +6,11 @@ from io import BytesIO
 from expression_type import ExpressionType, PlayerParameter, ObjectParameter
 from integer_type import IntegerType
 from tag_type import TagType
-from utils import hex2int
 
 SPECIAL_START = b'\x02'  # 0x02
 SPECIAL_END = b'\x03'  # 0x03
+
+ALL_REF_SHEETS = {}
 
 
 class Specials:
@@ -24,11 +25,15 @@ class Specials:
         elif _buf:
             self.buf = _buf
             self.length = length
-        self.bytearray = bytearray()
+        self.result = ""
 
         if not self.funcs:
             for name, member in TagType.__members__.items():
-                self.funcs[member] = getattr(self, 'process_type_' + name, None)
+                formatted = ''.join([s if s.isalpha() and s.islower() else '_' + s.lower() for s in name]).lstrip('_')
+                if formatted[-2] == '_' and formatted[-3].isdecimal():
+                    tmp = formatted[-1]
+                    formatted = formatted[:-2] + tmp
+                self.funcs[member] = getattr(self, 'process_type_' + formatted, None)
 
     @classmethod
     def process(cls, _bytes=None, _buf=None, length=0):
@@ -37,25 +42,26 @@ class Specials:
 
     def do_process(self):
         end = self.buf.tell() + self.length
+        static_bytes = bytearray()
         while self.buf.tell() < end:
             _byte = self.buf.read(1)
             if _byte == SPECIAL_START:
                 tag = ord(self.buf.read(1))
-                # print(tag)
                 try:
                     tag_type = TagType(tag)
-                    # print(tag_type)
-                except Exception:
+                except ValueError:
                     print('0x%.2x is not a valid TagType' % tag)
                     break
+                if static_bytes:
+                    self.result += str(static_bytes, 'utf8')
+                    static_bytes = bytearray()
                 length = IntegerType.get_value(self.buf)
-                start = self.buf.tell()
-                self.buf.seek(start)
+                # start = self.buf.tell()
                 if tag_type in self.funcs and self.funcs[tag_type] is not None:
-                    self.bytearray += self.funcs[tag_type](self.buf, tag_type, length)
+                    self.result += self.funcs[tag_type](self.buf, tag_type, length)
                 else:
                     print(tag_type)
-                    print('TagType 0x%.2X not procceed!!' % tag)
+                    print('TagType 0x%.2X not processed!!' % tag)
                     print('length: %d' % length)
 
                     pos = self.buf.tell()
@@ -70,29 +76,33 @@ class Specials:
                     self.buf.seek(self.buf.tell()-1)
                     print(self.buf.read(1))
                     print('tag 0x%.2x not finish correctly' % tag)
-                    print(self.bytearray)
-                    size = self.buf.tell() - start
-                    self.buf.seek(self.buf.tell() - 17 if self.buf.tell() - 17 > 0 else 0)
-                    _bytes = self.buf.read(length + 0x20)
-                    print(' '.join(map(lambda b: '%.2X' % b, _bytes)))
-
-                    print('-----------------------')
-
-                    self.buf.seek(start - 5 if start - 5 > 0 else 0)
-                    print(' '.join(map(lambda b: '%.2X' % b, self.buf.read(size + 0x20))))
-
-                    self.buf.seek(start)
-                    self.funcs[tag_type](self.buf, tag_type, length)
-                    exit(0)
+                    # size = self.buf.tell() - start
+                    # self.buf.seek(self.buf.tell() - 17 if self.buf.tell() - 17 > 0 else 0)
+                    # _bytes = self.buf.read(length + 0x20)
+                    # print(' '.join(map(lambda b: '%.2X' % b, _bytes)))
+                    #
+                    # print('-----------------------')
+                    #
+                    # self.buf.seek(start - 5 if start - 5 > 0 else 0)
+                    # print(' '.join(map(lambda b: '%.2X' % b, self.buf.read(size + 0x20))))
+                    #
+                    # self.buf.seek(start)
+                    # self.funcs[tag_type](self.buf, tag_type, length)
+                    # exit(0)
             else:
-                self.bytearray += _byte
+                static_bytes += _byte
 
-        return self.bytearray
+        if static_bytes:
+            self.result += str(static_bytes, 'utf8')
+
+        return self.result
 
     def process_expression_for_str(self, _buf, length=0, type_value=None, tag_type=None):
         value = self.process_expression(_buf, length, type_value, tag_type)
         if isinstance(value, bytearray) or isinstance(value, bytes):
             return repr(str(value, 'utf8'))
+        # if isinstance(value, str):
+        #     return repr(value)
         return str(value)
 
     def process_expression(self, _buf, length=0, type_value=None, tag_type=None):
@@ -108,7 +118,7 @@ class Specials:
 
         try:
             exp_type = ExpressionType(type_value)
-        except Exception:
+        except ValueError:
             if not tag_type.name.startswith('Unknown'):
                 print('0x%.2x is not a valid ExpressionType' % type_value)
             _buf.seek(_buf.tell() - 1)
@@ -163,19 +173,19 @@ class Specials:
             value = Specials.process(_buf=_buf, length=exp_len)
             return value
         else:
-            pos = _buf.tell()
-            left = pos - 10 if pos > 10 else 0
-            before = pos - left
-            _buf.seek(left)
-            print('%s [%.2X] %s' % (' '.join(map(lambda b: '%.2X' % b, _buf.read(before))), _buf.read(1), ' '.join(map(lambda b: '%.2X' % b, _buf.read(length + 0x20)))))
+            # pos = _buf.tell()
+            # left = pos - 10 if pos > 10 else 0
+            # before = pos - left
+            # _buf.seek(left)
+            # print('%s [%.2X] %s' % (' '.join(map(lambda b: '%.2X' % b, _buf.read(before))), _buf.read(1), ' '.join(map(lambda b: '%.2X' % b, _buf.read(length + 0x20)))))
 
-            print('ExpressionType 0x%.2X not procceed!!' % type_value)
+            print('ExpressionType 0x%.2X not processed!!' % type_value)
             exit(0)
 
-    def process_type_Value(self, _buf, tag, length):
-        return bytes(str(self.process_expression(_buf, length - 1)), 'utf8')
+    def process_type_value(self, _buf, tag, length):
+        return str(self.process_expression(_buf, length - 1))
 
-    def process_type_If(self, _buf, tag, length):
+    def process_type_if(self, _buf, tag, length):
         start = _buf.tell()
         end = start + length
         try:
@@ -204,132 +214,149 @@ class Specials:
                 falses.append(self.process_expression_for_str(_buf))
             false_value = '[%s]' % ', '.join(falses)
 
-        return bytes('<If(%s)>%s<Else>%s</If>' % (condition, str(true_value), str(false_value)), 'utf8')
+        return '<If(%s)>%s<Else>%s</If>' % (condition, str(true_value), str(false_value))
 
-    def process_type_Switch(self, _buf, tag, length):
+    def process_type_switch(self, _buf, tag, length):
         end = _buf.tell() + length
         case_switch = self.process_expression(_buf)
         cases = []
         while _buf.tell() < end:
             case = self.process_expression_for_str(_buf)
             cases.append(str(case))
-        return bytes('<Switch %s>%s</Switch>' % (case_switch, '; '.join(['%d: %s' % (i + 1, v) for i, v in enumerate(cases)])), 'utf8')
+        return '<Switch %s>%s</Switch>' % (case_switch, '; '.join(['%d: %s' % (i + 1, v) for i, v in enumerate(cases)]))
 
-    def process_type_LineBreak(self, _buf, tag, length):
+    def process_type_line_break(self, _buf, tag, length):
         if length:
             _buf.read(length)
-        return bytes('<LineBreak>', 'utf8')
+        return '<LineBreak>'
 
-    def process_type_Sheet(self, _buf, tag, length):
-        return self.process_type_GenericElementWithVariableArguments(_buf, tag, length, 2, 0xFF)
+    def process_type_sheet(self, _buf, tag, length):
+        return self._process_type_generic_element_with_variable_arguments(_buf, tag, length, 2, 0xFF)
 
-    def process_type_SheetEn(self, _buf, tag, length):
-        return self.process_type_GenericElementWithVariableArguments(_buf, tag, length, 3, 0xFF)
+    def process_type_sheet_en(self, _buf, tag, length):
+        return self._process_type_generic_element_with_variable_arguments(_buf, tag, length, 3, 0xFF)
 
-    def process_type_SheetDe(self, _buf, tag, length):
-        return self.process_type_GenericElementWithVariableArguments(_buf, tag, length, 3, 0xFF)
+    def process_type_sheet_de(self, _buf, tag, length):
+        return self._process_type_generic_element_with_variable_arguments(_buf, tag, length, 3, 0xFF)
 
-    def process_type_SheetFr(self, _buf, tag, length):
-        return self.process_type_GenericElementWithVariableArguments(_buf, tag, length, 3, 0xFF)
+    def process_type_sheet_fr(self, _buf, tag, length):
+        return self._process_type_generic_element_with_variable_arguments(_buf, tag, length, 3, 0xFF)
 
-    def process_type_SheetJa(self, _buf, tag, length):
-        return self.process_type_GenericElementWithVariableArguments(_buf, tag, length, 3, 0xFF)
+    def process_type_sheet_ja(self, _buf, tag, length):
+        return self._process_type_generic_element_with_variable_arguments(_buf, tag, length, 3, 0xFF)
 
-    def process_type_Clickable(self, _buf, tag, length):
-        return self.process_type_GenericElementWithVariableArguments(_buf, tag, length, 1, 0xFF)
+    def process_type_clickable(self, _buf, tag, length):
+        return self._process_type_generic_element_with_variable_arguments(_buf, tag, length, 1, 0xFF)
 
-    def process_type_GenericElementWithVariableArguments(self, _buf, tag, length, min_paras, max_paras):
+    def _process_type_generic_element_with_variable_arguments(self, _buf, tag, length, min_paras, max_paras):
         end = _buf.tell() + length
         params = []
         while _buf.tell() < end and len(params) < max_paras:
             v = self.process_expression_for_str(_buf)
             params.append(v)
 
-        return bytes('%s(%s)' % (tag.name, ', '.join(params)), 'utf8')
+        if (min_paras == 2 and params[1].isdecimal()) or \
+            (min_paras == 3 and params[2].isdecimal()):
 
-    def process_type_SoftHyphen(self, _buf, tag, length):
+            if min_paras == 2:
+                try:
+                    _dict = ALL_REF_SHEETS[params[0]]
+                    _line = _dict[params[1]]
+                    _value = _line[params[2]] if len(params) > 2 else _line
+                    return '【%s】' % str(_value)
+                except Exception:
+                    pass
+            else:
+                pass
+
+            params[0] = repr(params[0])
+
+        return '%s(%s)' % (tag.name, ', '.join(params))
+
+    def process_type_soft_hyphen(self, _buf, tag, length):
         if length:
             _buf.read(length)
-        return bytes()
+        return ''
 
-    def process_type_Dash(self, _buf, tag, length):
+    def process_type_dash(self, _buf, tag, length):
         if length:
             _buf.read(length)
-        return bytes(b'\x2D')  # '-'
+        return '-'
 
-    def process_type_Emphasis(self, _buf, tag, length):
-        return self.process_type_GenericSurroundingTag(_buf, tag, length)
+    def process_type_emphasis(self, _buf, tag, length):
+        return self._process_type_generic_surrounding_tag(_buf, tag, length)
 
-    def process_type_Emphasis2(self, _buf, tag, length):
-        return self.process_type_GenericSurroundingTag(_buf, tag, length)
+    def process_type_emphasis_2(self, _buf, tag, length):
+        return self._process_type_generic_surrounding_tag(_buf, tag, length)
 
-    def process_type_GenericSurroundingTag(self, _buf, tag, length):
+    def _process_type_generic_surrounding_tag(self, _buf, tag, length):
         if length != 1:
             print('%s wrong len' % tag.name)
             exit(0)
-            return bytes()
+            return ''
         status = IntegerType.get_value(_buf)
         if status == 0:
-            return bytes('</%s>' % tag.name, 'utf8')
+            return '</%s>' % tag.name
         elif status == 1:
-            return bytes('<%s>' % tag.name, 'utf8')
+            return '<%s>' % tag.name
         print('%s wrong data' % tag.name)
         exit(0)
-        return bytes()
+        return ''
 
-    def process_type_Color(self, _buf, tag, length):
+    def process_type_color(self, _buf, tag, length):
         type_value = ord(_buf.read(1))
         if length == 1 and type_value == 0xEC:
-            return bytes('</%s>' % tag.name, 'utf8')
+            return '</%s>' % tag.name
 
         color = self.process_expression(_buf, type_value=type_value)
         if isinstance(color, str):
-            return bytes('<%s %s>' % (tag.name, color), 'utf8')
-        return bytes('<%s #%.2X%.2X%.2X%.2X>' % (tag.name, (color >> 16) & 0xFF, (color >> 8) & 0xFF, (color >> 0) & 0xFF, (color >> 24) & 0xFF), 'utf8')
+            return '<%s %s>' % (tag.name, color)
+        return '<%s #%.2X%.2X%.2X%.2X>' % (tag.name, (color >> 16) & 0xFF, (color >> 8) & 0xFF, (color >> 0) & 0xFF, (color >> 24) & 0xFF)
 
-    def process_type_Color2(self, _buf, tag, length):
-        return self.process_type_Color(_buf, tag, length)
+    def process_type_color_2(self, _buf, tag, length):
+        return self.process_type_color(_buf, tag, length)
 
-    def process_type_Indent(self, _buf, tag, length):
+    def process_type_indent(self, _buf, tag, length):
         if length:
             _buf.read(length)
-        return bytes(b'\x09')  # 'TAB'
+        return '\t'
+        # return bytes(b'\x09')  # 'TAB'
 
-    def process_type_Gui(self, _buf, tag, length):
-        return self._process_type_GenericElement(_buf, tag, length, 1, False)
+    def process_type_gui(self, _buf, tag, length):
+        return self._process_type_generic_element(_buf, tag, length, 1, False)
 
-    def process_type_Highlight(self, _buf, tag, length):
-        return self._process_type_GenericElement(_buf, tag, length, 0, True)
+    def process_type_highlight(self, _buf, tag, length):
+        return self._process_type_generic_element(_buf, tag, length, 0, True)
 
-    def process_type_Time(self, _buf, tag, length):
-        return self._process_type_GenericElement(_buf, tag, length, 1, False)
+    def process_type_time(self, _buf, tag, length):
+        return self._process_type_generic_element(_buf, tag, length, 1, False)
 
-    def process_type_Time2(self, _buf, tag, length):
-        return self._process_type_GenericElement(_buf, tag, length, 1, True)
+    def process_type_time_2(self, _buf, tag, length):
+        return self._process_type_generic_element(_buf, tag, length, 1, True)
 
-    def process_type_TwoDigitValue(self, _buf, tag, length):
-        return self._process_type_GenericElement(_buf, tag, length, 0, True)
+    def process_type_two_digit_value(self, _buf, tag, length):
+        return self._process_type_generic_element(_buf, tag, length, 0, True)
 
-    def process_type_Split(self, _buf, tag, length):
-        (args, content) = self._process_type_GenericElement(_buf, tag, length, 3, False, not_format=True)
+    def process_type_split(self, _buf, tag, length):
+        (args, content) = self._process_type_generic_element(_buf, tag, length, 3, False, not_format=True)
         using_family = (args[-1] == 2 or args[-1] == '2')
         orginal_name = args[1].replace('\'', '')
         if orginal_name== '<Highlight>[SelfName]</Highlight>':
-            return bytes('[SelfName_FamilyName]' if using_family else '[SelfName_GivenName]', 'utf8')
+            return '[SelfName_FamilyName]' if using_family else '[SelfName_GivenName]'
         if orginal_name == '<Highlight>[Name1]</Highlight>':
-            return bytes('[Name1_FamilyName]' if using_family else '[Name1_GivenName]', 'utf8')
+            return '[Name1_FamilyName]' if using_family else '[Name1_GivenName]'
         if orginal_name == '<Highlight>[Name2]</Highlight>':
-            return bytes('[Name2_FamilyName]' if using_family else '[Name2_GivenName]', 'utf8')
+            return '[Name2_FamilyName]' if using_family else '[Name2_GivenName]'
 
-        return bytes('<Split(%s, %s)[%s]>' % (orginal_name, args[2], args[-1]), 'utf8')
-        # return self._process_type_GenericElement_format(tag, args, content)
+        return '<Split(%s, %s)[%s]>' % (orginal_name, args[2], args[-1])
+        # return self._process_type_generic_element_format(tag, args, content)
 
-    def process_type_Wait(self, _buf, tag, length):
-        return self._process_type_GenericElement(_buf, tag, length, 1, False)
+    def process_type_wait(self, _buf, tag, length):
+        return self._process_type_generic_element(_buf, tag, length, 1, False)
 
-    def _process_type_GenericElement(self, _buf, tag, length, arg_count, has_content, not_format=False):
+    def _process_type_generic_element(self, _buf, tag, length, arg_count, has_content, not_format=False):
         if not length:
-            return bytes('<%s/>' % tag.name, 'utf8')
+            return '<%s/>' % tag.name
         end = _buf.tell() + length
         args = [tag.name]
         for _ in range(arg_count):
@@ -339,43 +366,39 @@ class Specials:
         content = self.process_expression_for_str(_buf) if has_content else None
         if not_format:
             return args, content
-        return self._process_type_GenericElement_format(tag, args, content)
+        return self._process_type_generic_element_format(tag, args, content)
 
-    def _process_type_GenericElement_format(self, tag, args, content):
-        show_ba = bytearray('<%s' % ' '.join(args), 'utf8')
+    def _process_type_generic_element_format(self, tag, args, content):
+        result = '<%s' % ' '.join(args)
         if content:
-            show_ba += bytes('>%s</%s>' % (content, tag.name), 'utf8')
+            result += '>%s</%s>' % (content, tag.name)
         else:
-            show_ba += bytes('/>', 'utf8')
-        return show_ba
+            result += '/>'
+        return result
 
-    def process_type_Format(self, _buf, tag, length):
+    def process_type_format(self, _buf, tag, length):
         end = _buf.tell() + length
         arg1 = self.process_expression_for_str(_buf)
         arg2 = _buf.read(end - _buf.tell()).hex()
-        return bytes('Format(%s, %s)' % (arg1, arg2), 'utf8')
+        return 'Format(%s, %s)' % (arg1, arg2)
 
-    def process_type_Unknown14(self, _buf, tag, length):
-        value = self.process_expression_for_str(_buf, length, tag_type=tag)
-        return bytes('<Unknown14>%s</Unknown14>' % value, 'utf8')
-
-    def process_type_Unknown26(self, _buf, tag, length):
+    def process_type_unknown_26(self, _buf, tag, length):
         end = _buf.tell() + length
         values = []
         while _buf.tell() < end:
             value = self.process_expression_for_str(_buf, length, tag_type=tag)
             values.append(value)
-        return bytes('<Unknown26>%s</Unknown26>' % (', '.join(values)), 'utf8')
+        return '<Unknown26>%s</Unknown26>' % (', '.join(values))
 
-    def process_type_Unknown2D(self, _buf, tag, length):
+    def process_type_unknown_2d(self, _buf, tag, length):
         value = self.process_expression_for_str(_buf, length, tag_type=tag)
-        return bytes('<Unknown2D>%s</Unknown2D>' % value, 'utf8')
+        return '<Unknown2D>%s</Unknown2D>' % value
 
-    def process_type_Unknown2F(self, _buf, tag, length):
+    def process_type_unknown_2f(self, _buf, tag, length):
         value = self.process_expression_for_str(_buf, length, tag_type=tag)
-        return bytes('<Unknown2F>%s</Unknown2F>' % value, 'utf8')
+        return '<Unknown2F>%s</Unknown2F>' % value
 
-    def process_type_Unknown_tmp(self, _buf, tag, length):
+    def process_type_unknown_tmp(self, _buf, tag, length):
         start = _buf.tell()
 
         seek_len = _buf.tell() - 8

@@ -103,12 +103,7 @@ def get_data_rows(sheet, block_path, data_path, offset_path, columns, rows, expo
                     block_file.write(_bytes)
                 if _bytes[-1] == 0x00:
                     _bytes = _bytes[:-1]
-                procceed = Specials.process(_bytes)
-                try:
-                    row.append(str(procceed, 'utf8') if _bytes else '')
-                except Exception:
-                    print(' '.join(['%.2X' % b for b in procceed]))
-                    procceed = Specials.process(_bytes)
+                row.append(Specials.process(_bytes) if _bytes else '')
                 # row.append(str(Specials.process(_bytes), 'utf8') if _bytes else '')
             else:
                 byte = buf.read(DATA_SIZE[col])
@@ -124,17 +119,17 @@ def get_data_rows(sheet, block_path, data_path, offset_path, columns, rows, expo
         block_file.close()
 
 
-def export_sheet(sheet, export_path, export_bin=False):
+def export_sheet(sheet, export_path, export_bin=False, return_dict=None):
     path = os.path.join(export_path, sheet.name, "%s.csv" % (sheet.lang if sheet.lang is not None and sheet.lang else "data"))
     # print(export_path)
+    index_list = ["No"]
+    index_list.extend(sheet.index_params)
+    type_list = ["No"]
+    type_list.extend(sheet.type_params)
     with codecs.open(path, 'w', 'utf-8') as csvfile:
         writer = csv.writer(csvfile)
-        head = ["No"]
-        head.extend(sheet.index_params)
-        writer.writerow(head)
-        head = ["No"]
-        head.extend(sheet.type_params)
-        writer.writerow(head)
+        writer.writerow(index_list)
+        writer.writerow(type_list)
         for block in sheet.blocks:
             # print(block)
             block_name = '%s_%s.bin' % (sheet.lang, block.data) if sheet.lang is not None and sheet.lang else '%s.bin' % block.data
@@ -147,6 +142,15 @@ def export_sheet(sheet, export_path, export_bin=False):
                 if os.path.exists(data_path) and os.path.exists(offset_path):
                     get_data_rows(sheet, block_path, data_path, offset_path, sheet.type_params, rows, export_bin)
                     writer.writerows(rows)
+
+                    if return_dict is not None:
+                        for row in rows:
+                            key = str(row[0])
+                            if key not in return_dict:
+                                return_dict[key] = {}
+                            for index, value in enumerate(row[1:]):
+                                return_dict[key][str(sheet.index_params[index])] = value
+
                 else:
                     if not os.path.exists(offset_path):
                         print("\t***%s offset missing: %s" % (sheet.lang, offset_path))
